@@ -85,12 +85,62 @@ function createModel() {
     
     // Add a single hidden layer
     model.add(tf.layers.dense({inputShape: [1], units: 1, useBias: true}));
+
+    model.add(tf.layers.dense({units: 1, useBias: true}));
+   model.add(tf.layers.dense({units: 20, useBias: true,activation:'sigmoid'}));
+   model.add(tf.layers.dense({units: 15, useBias: true,activation:'sigmoid'}));
+   model.add(tf.layers.dense({units: 1, useBias: true}));
     
     // Add an output layer
     model.add(tf.layers.dense({units: 1, useBias: true}));
   
     return model;
   }
+
+  function testModel(model, inputData, normalizationData) {
+    const {inputMax, inputMin, labelMin, labelMax} = normalizationData;  
+    
+    // Generate predictions for a uniform range of numbers between 0 and 1;
+    // We un-normalize the data by doing the inverse of the min-max scaling 
+    // that we did earlier.
+    const [xs, preds] = tf.tidy(() => {
+      
+      const xs = tf.linspace(0, 1, 100);      
+      const preds = model.predict(xs.reshape([100, 1]));      
+      
+      const unNormXs = xs
+        .mul(inputMax.sub(inputMin))
+        .add(inputMin);
+      
+      const unNormPreds = preds
+        .mul(labelMax.sub(labelMin))
+        .add(labelMin);
+      
+      // Un-normalize the data
+      return [unNormXs.dataSync(), unNormPreds.dataSync()];
+    });
+    
+   
+    const predictedPoints = Array.from(xs).map((val, i) => {
+      return {x: val, y: preds[i]}
+    });
+    // console.log(typeof(predictedPoints));
+    
+    const originalPoints = inputData.map(d => ({
+      x: d.horsepower, y: d.mpg,
+    }));
+    
+    
+    tfvis.render.scatterplot(
+      {name: 'Model Predictions vs Original Data'}, 
+      {values: [originalPoints, predictedPoints], series: ['original', 'predicted']}, 
+      {
+        xLabel: 'Horsepower',
+        yLabel: 'MPG',
+        height: 300
+      }
+    );
+}
 
 async function run() {
 // Load and plot the original input data that we are going to train on.
@@ -125,5 +175,8 @@ const {inputs, labels} = tensorData;
 // Train the model  
 await trainModel(model, inputs, labels);
 console.log('Done Training');
+// Make some predictions using the model and compare them to the
+// original data
+testModel(model, data, tensorData);
 } 
 document.addEventListener('DOMContentLoaded', run);
